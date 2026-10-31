@@ -1,0 +1,15 @@
+[
+  {
+    "default": true,
+    "label": "Enable cart validation",
+    "name": "enabled",
+    "type": "boolean"
+  },
+  {
+    "default": "10",
+    "description": "Positive whole number of units across all cart lines.",
+    "label": "Maximum total cart quantity",
+    "name": "maxCartQuantity",
+    "type": "text"
+  }
+]

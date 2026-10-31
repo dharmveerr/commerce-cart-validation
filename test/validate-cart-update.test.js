@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { validateCart } from '../src/commerce-extensibility-1/lib/validate-cart.js';
+import { BLOCK_MESSAGE } from '../src/commerce-extensibility-1/lib/constants.js';
+const logger = () => ({ info() {}, error() {} });
+const deps = { logger, settings: async () => ({ enabled: true, maxCartQuantity: 10 }), cart: async () => [{ item_id: 1, sku: 'A', qty: 8 }] };
+const params = (qty) => ({ data: { item: { item_id: 1, quote_id: 9, sku: 'A', qty } } });
+test('update replaces same item_id and blocks increases only', async () => { assert.match(JSON.stringify(await validateCart(params(11), 'update', deps)), new RegExp(BLOCK_MESSAGE.replaceAll('.', '\\.'))); assert.doesNotMatch(JSON.stringify(await validateCart(params(10), 'update', deps)), /maximum number/); });
+test('update permits decreases and removal even above limit', async () => { const high = { ...deps, cart: async () => [{ item_id: 1, sku: 'A', qty: 12 }] }; for (const qty of [11, 0]) assert.doesNotMatch(JSON.stringify(await validateCart(params(qty), 'update', high)), /maximum number/); });
+test('settings changes apply on next request', async () => { let limit = 10; const live = { ...deps, settings: async () => ({ enabled: true, maxCartQuantity: limit }) }; assert.doesNotMatch(JSON.stringify(await validateCart(params(9), 'update', live)), /maximum number/); limit = 8; assert.match(JSON.stringify(await validateCart(params(9), 'update', live)), /maximum number/); });

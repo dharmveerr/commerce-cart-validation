@@ -1,0 +1,16 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { checkLimit, totalUnits } from '../src/commerce-extensibility-1/lib/cart-limit-rule.js';
+import { BLOCK_MESSAGE } from '../src/commerce-extensibility-1/lib/constants.js';
+const line = (item_id, qty, sku = 'A') => ({ item_id, qty, sku });
+const run = (items, item, max = 10) => checkLimit({ currentItems: items, changedItem: item, maxCartQuantity: max });
+test('S1 below limit and S2 at limit accepted', () => { assert.equal(run([line(1, 3)], line(2, 6)).blocked, false); assert.equal(run([line(1, 3)], line(2, 7)).blocked, false); });
+test('S3 above limit blocked with exact message', () => assert.deepEqual(run([line(1, 7)], line(2, 4)).message, BLOCK_MESSAGE));
+test('S4 existing item_id replaced, not added', () => assert.equal(run([line(1, 6)], line(1, 9)).blocked, false));
+test('S4b existing item_id exceeding total blocked', () => assert.equal(run([line(1, 6), line(2, 2, 'B')], line(1, 9)).message, BLOCK_MESSAGE));
+test('S5/S5b across SKUs and same SKU distinct options counted separately', () => { assert.equal(run([line(1, 6, 'A'), line(2, 4, 'B')], line(3, 1, 'C')).blocked, true); assert.equal(run([line(1, 6, 'A')], { sku: 'A', qty: 5, product_option: { color: 'red' } }).message, BLOCK_MESSAGE); });
+test('S7 lower/remove allowed above limit', () => { assert.equal(run([line(1, 12)], line(1, 11)).blocked, false); assert.equal(run([line(1, 12)], line(1, 0)).blocked, false); });
+test('S8 unchanged above limit allowed', () => assert.equal(run([line(1, 12)], line(1, 12)).blocked, false));
+test('parent only: configurable and bundle children excluded', () => assert.equal(totalUnits([line(1, 3), { ...line(2, 3), parent_item_id: 1 }, { ...line(3, 4), parent_item_id: 4 }, line(4, 2)]), 5));
+test('merge prospective total compared with previous total', () => { assert.equal(checkLimit({ currentItems: [line(1, 8)], nextItems: [line(1, 8), line(2, 3)], maxCartQuantity: 10 }).message, BLOCK_MESSAGE); assert.equal(checkLimit({ currentItems: [line(1, 12)], nextItems: [line(1, 10)], maxCartQuantity: 10 }).blocked, false); });
+test('invalid quantities and settings are errors, not blocks', () => { assert.throws(() => run([line(1, 'abc')], line(1, 2))); assert.throws(() => run([], line(1, 2), 0)); });
