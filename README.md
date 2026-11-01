@@ -1,37 +1,146 @@
 # Cart Validation
 
-## 1. Overview
-ACCS App Builder app `cart-validation` enforces the total number of units in a cart (parent lines only). Increases above the configured limit return **You have reached the maximum number of items.** Decreases, removals and unchanged totals pass even when the cart is already over the limit. Technical failures fail open and log only error type/outcome, not customer data.
+An Adobe App Builder app for **Adobe Commerce as a Cloud Service (ACCS)** that limits the **total number of units in a cart**.
+
+- The limit is set by an Admin user. Default: **10**.
+- When a change would go over the limit, it is blocked with:
+  `You have reached the maximum number of items.`
+- Lowering a quantity or removing an item is always allowed.
+- If anything goes wrong (for example Commerce cannot be reached), the change is allowed and an error is logged.
+
+App ID: `cart-validation` · Runtime: Node.js 24 · Requirements: [docs/requirements.md](docs/requirements.md)
+
+## 1. How it works
+
+1. Commerce calls the app through a webhook when a shopper adds an item, changes a quantity, or logs in (guest cart merge).
+2. The app reads the settings and the saved cart.
+3. It adds up all cart lines (parent lines only) and blocks the change only if the total **goes up** and is **above the limit**.
+
+| Case | Webhook (`before`) | Action | Fields used |
+| --- | --- | --- | --- |
+| Item added | `observer.sales_quote_add_item` | `validate-cart-add` | `sku`, `qty`, `quote_id`, `item_id`, `product_type`, `product_option` |
+| Item saved (quantity changed, or same item added again) | `observer.sales_quote_item_save_after` | `validate-cart-update` | Same as above |
+| Guest cart merged at login | `observer.sales_quote_merge_after` | `validate-cart-merge` | `quote` (with `items`) and `source` (with `items`) |
+
+All webhooks: `required: false`, timeout 5 s, soft timeout 3 s, fallback message, Adobe authentication. Removing an item is not hooked because it is always allowed.
+
+More detail: [docs/hld.md](docs/hld.md), [docs/lld.md](docs/lld.md).
 
 ## 2. Prerequisites
-Node.js 24, Adobe Developer Console App Builder workspace with I/O Management API, ACCS-REST-API and OAuth Server-to-Server subscription, App Management access, and a SaaS Commerce test instance. Keep `.env` out of source control; credentials and endpoints must come from project setup, not code.
+
+- Node.js 24 and npm
+- Adobe I/O CLI: `npm install -g @adobe/aio-cli`
+- An Adobe Developer Console project with an App Builder workspace (Stage and Production) and these APIs:
+  - **I/O Management API**
+  - **ACCS-REST-API**
+  - **OAuth Server-to-Server**
+- Access to an ACCS **sandbox** with **Apps > App Management** permission
 
 ## 3. Setup
-Run `npm install`, then `aio app build`. The SDK owns `.generated/` and the installation action: never edit generated files. App configuration is in `app.commerce.config.ts`; runtime registrations are in `src/commerce-extensibility-1/ext.config.yaml`.
 
-## 4. Configuration
-After installing/associating the app in Commerce Admin App Management, set `enabled` (boolean, default true) and `maxCartQuantity` (positive whole number, default 10). The current SDK configuration schema offers no numeric input type, so `maxCartQuantity` is a text control defaulting to `"10"` and validated strictly on every invocation. Invalid settings allow changes and log an error. Global scope is used; configuration changes are read live without redeployment.
+```bash
+git clone https://github.com/dharmveerr/commerce-cart-validation.git
+cd commerce-cart-validation
+npm install
+aio login
+aio app use        # choose the organization, project and Stage workspace
+```
 
-## 5. Webhook rationale
-| Registration | Payload | Rationale |
+Then fill in the OAuth Server-to-Server values in `.env`, using [.env.template](.env.template) as the list of keys:
+
+```text
+AIO_COMMERCE_AUTH_IMS_CLIENT_ID=
+AIO_COMMERCE_AUTH_IMS_CLIENT_SECRETS=
+AIO_COMMERCE_AUTH_IMS_TECHNICAL_ACCOUNT_ID=
+AIO_COMMERCE_AUTH_IMS_TECHNICAL_ACCOUNT_EMAIL=
+AIO_COMMERCE_AUTH_IMS_ORG_ID=
+AIO_COMMERCE_AUTH_IMS_SCOPES=
+```
+
+Copy these from the OAuth Server-to-Server credential in the Developer Console. **Never commit `.env`.**
+
+## 4. Build, test and deploy
+
+```bash
+npm test           # unit tests
+aio app build
+aio app deploy
+```
+
+- If you change `app.commerce.config.ts`, run `npx aio-commerce-lib-app generate all` first.
+- Do not edit files in `.generated/` folders. The SDK creates them.
+- Deploying does **not** install the webhooks in Commerce. Do step 5.
+
+## 5. Install in Commerce
+
+1. In Commerce Admin, go to **Apps > App Management**.
+2. Find **Cart Validation**. Click **Associate App** and choose your project and workspace.
+3. Complete the installation. The status must be **Installed**.
+4. Check that the three webhooks in section 1 are active.
+
+## 6. Configuration
+
+In **Apps > App Management > Cart Validation > Configure** (global scope):
+
+| Setting | Default | Meaning |
 | --- | --- | --- |
-| `observer.sales_quote_add_item` / `before` | `sku`, `qty`, `quote_id`, `item_id`, `product_type`, `product_option` selected from `quote_item` | Intended add interception; fetch other cart lines. |
-| `observer.sales_quote_item_save_after` / `before` | Same fields selected from `item` | Intended quantity-change interception; match line by `item_id`, not SKU. |
-| `observer.sales_quote_merge_after` / `before` | Nested `quote` and `source`; no field projection | Intended guest merge interception; nested field projection not established. |
+| Enable cart validation | Yes | Turns the check on or off |
+| Maximum total cart quantity | `10` | Highest total number of units in a cart. Whole number, 1 or more. |
 
-Each registration is SaaS-only `validation`, batch `cart_validation`, POST, `required: false`, `timeout: 5000`, `soft_timeout: 3000`, and a friendly fallback message. Actions are HTTP-invokable with Adobe authentication and IMS credentials. `sales_quote_product_add_after` is not chosen because it is too late to block an add reliably; `sales_quote_merge_before` is not chosen because the prospective combined quote shape has not been verified. **Verify registration/event availability and exact pre-persistence payload timing on the target ACCS version before relying on enforcement**; a `before` webhook type on an `*_after` observer event is not by itself proof the mutation can be rolled back.
+- Changes apply immediately. No redeploy needed.
+- An invalid value (for example `0` or `abc`) means carts are allowed and an error is logged.
+- To turn the check off quickly, set **Enable cart validation** to **No**.
 
-## 6. Deploy
-Build locally with `aio app build`, inspect the generated manifest and only then deploy through the team's approved release workflow. Do not commit credentials. Deployment is a separate decision and has not been performed here.
+## 7. Testing
 
-## 7. Install and test
-Install/associate the deployed app from Commerce Admin App Management; deployment alone does not install hooks. Run `npm test` locally and follow `docs/sandbox-test-checklist.md` in sandbox. Attach actual sandbox results and local test output to the pull request before acceptance.
+- **Unit tests:** `npm test`
+- **Sandbox tests:** follow [docs/deployment-and-live-testing.md](docs/deployment-and-live-testing.md) and record results in [docs/sandbox-test-checklist.md](docs/sandbox-test-checklist.md).
+- **Logs:** `aio app logs`. Look for `cart validation allowed`, `blocked` or `error`.
 
-## 8. Known limitations
-Synchronous hooks fail open on timeout and operational errors (`required: false`), so the limit is not a hard guarantee during outages. Parallel cart mutations, Admin Create-Order paths, and merge payload/pre-persistence behavior require sandbox verification. The Commerce cart GET response may reflect an already-applied candidate line: this could prevent detection of an increase. There is no signature verification, persistence, or reporting database, per approved scope. Only parent lines are counted; malformed quantities fail open. Keep all cart client work under two seconds (one 650 ms attempt, one 650 ms retry after 100 ms backoff).
+Acceptance criteria mapping: [docs/ac-to-test-mapping.md](docs/ac-to-test-mapping.md).
 
-## 9. Assumptions and evidence boundaries
-The literal `requirements.md` is not available in this workspace. S1–S8 scenario names below are inferred from the supplied acceptance-criteria mapping and not quotations from that attachment. Confirm the source document and the exact webhook payload paths before approving the PR. API permissions and webhook rollout must be validated in sandbox; no sandbox execution was possible locally.
+## 8. Project structure
 
-## 10. AC-to-test mapping
-See `docs/ac-to-test-mapping.md`; automated tests cover the rule, parser and action responses, not deployed end-to-end behavior. PR evidence must include local `npm test` output and completed sandbox checklist.
+```text
+app.commerce.config.ts                 App details, settings, webhooks
+src/commerce-extensibility-1/
+  ext.config.yaml                      Action definitions
+  actions/validate-cart-*/index.js     Add, update and merge entry points
+  lib/validate-cart.js                 Shared handler
+  lib/parse-webhook-payload.js         Reads the webhook payload
+  lib/cart-limit-rule.js               Counting rule
+  lib/settings.js                      Reads the Admin settings
+  lib/commerce-cart-client.js          Reads the cart from Commerce
+  lib/constants.js                     Block message
+test/                                  Unit tests
+docs/                                  Requirements, design and test documents
+```
+
+## 9. Known limitations
+
+- If the app is down or slow, changes are allowed without a check.
+- Two changes at the same moment can both pass and go over the limit.
+- Items added automatically by promotions are not checked.
+- One global limit for the whole store.
+
+## 10. Assumptions (to confirm in the sandbox)
+
+- A configurable or bundle product counts as its parent quantity only.
+- A blocked change leaves the cart unchanged (update and merge webhooks).
+- The cart read from Commerce shows the old quantities, not the new ones.
+- The merge payload contains the merged items in `quote.items`.
+- Admin "Create New Order" follows the same rule.
+
+## 11. Documents
+
+| Document | Purpose |
+| --- | --- |
+| [requirements.md](docs/requirements.md) | Requirements, acceptance criteria, scenarios |
+| [solution-design.md](docs/solution-design.md) | What the app does and why |
+| [blueprint.md](docs/blueprint.md) | Approved CDA plan |
+| [hld.md](docs/hld.md) / [lld.md](docs/lld.md) | High-level and detailed design |
+| [implementation.md](docs/implementation.md) | Files, status, known issues |
+| [deployment-runbook.md](docs/deployment-runbook.md) | Deploy, install, go/no-go, rollback |
+| [deployment-and-live-testing.md](docs/deployment-and-live-testing.md) | Sandbox test steps |
+| [sandbox-test-checklist.md](docs/sandbox-test-checklist.md) | Test results and evidence |
+| [ac-to-test-mapping.md](docs/ac-to-test-mapping.md) | Acceptance criteria to tests |
