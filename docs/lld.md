@@ -1,39 +1,82 @@
-# Low-level design (LLD) — cart validation
+# Low-Level Design: Cart Validation
 
-## Configuration and webhook contract
-`app.commerce.config.ts` declares `enabled: boolean = true` and `maxCartQuantity: text = "10"`. The runtime accepts only text convertible via `/^[1-9]\d*$/` to a safe integer; a missing/null config value falls back to the defaults. Settings are read using `initialize({ schema })` and `getConfigurationByKey` at `byCodeAndLevel('global', 'global')` each call. All three webhook registrations have `webhook_type: "before"`, POST, `required: false`, timeout `5000`, soft timeout `3000`, fallback `We could not validate your cart right now. Please try again.`, category `validation`, env `["saas"]`, batch `cart_validation`.
+## 1. Webhooks
 
-| Action / hook | Source fields and expected input | Normalized result |
+All three: type `before`, `POST`, `required: false`, `timeout: 5000`, `soft_timeout: 3000`, category `validation`, env `saas`, batch `cart_validation`, fallback message `We could not validate your cart right now. Please try again.`
+
+| Hook name | Webhook | Action | Fields sent |
+| --- | --- | --- | --- |
+| `validate_cart_add` | `observer.sales_quote_add_item` | `validate-cart-add` | `sku`, `qty`, `quote_id`, `item_id`, `product_type`, `product_option` from `data.quote_item` |
+| `validate_cart_update` | `observer.sales_quote_item_save_after` | `validate-cart-update` | Same fields from `data.item` |
+| `validate_cart_merge` | `observer.sales_quote_merge_after` | `validate-cart-merge` | Full payload: `data.quote` (with `entity_id`, `items`) and `data.source` (with `items`) |
+
+## 2. Reading the payload (`parse-webhook-payload.js`)
+
+| Kind | Input | Output |
 | --- | --- | --- |
-| `validate-cart-add` / `observer.sales_quote_add_item` / `validate_cart_add` | `data.quote_item.{sku,qty,quote_id,item_id,product_type,product_option}` projected individually to named fields; parser also accepts `data.quoteItem` and flat fields. | `{ kind:'add', quoteId, changedItem }` |
-| `validate-cart-update` / `observer.sales_quote_item_save_after` / `validate_cart_update` | Same six fields from `data.item.*`; parser also accepts flat fields. | `{ kind:'update', quoteId, changedItem }` |
-| `validate-cart-merge` / `observer.sales_quote_merge_after` / `validate_cart_merge` | Unprojected `data.quote` with `entity_id`, `items[]` and `data.source.items[]`. | `{ kind:'merge', quoteId, nextItems:quote.items, sourceItems:source.items }` |
+| add | `data.quote_item` | `{ quoteId, changedItem }` |
+| update | `data.item` | `{ quoteId, changedItem }` |
+| merge | `data.quote`, `data.source` | `{ quoteId, nextItems: quote.items }` |
 
-Actual projected webhook envelope and whether merge has a fully updated `quote.items` have **not** been confirmed against a live sandbox. The parser accepts `params.data`, `params.body`, or the params object itself. Required add/update inputs are a nonempty `sku`, numeric nonnegative `qty`, and `quote_id`; merge requires both item arrays and a `quote.entity_id`. Missing/invalid input raises; the orchestrator catches it and allows the change.
+A line must have a `sku`, and a `qty` of 0 or more. Add and update also need a `quote_id`. If anything is missing, an error is raised and the change is allowed.
 
-## Decision algorithm (`cart-limit-rule.js`)
+## 3. Counting rule (`cart-limit-rule.js`)
+
 ```text
-before = sum(Number(qty) for parent items in currentItems)
-if nextItems is provided (merge): after = sum(parent qty in nextItems)
-else (add/update):
-    matching = parent row in currentItems with same item_id (if supplied)
-    after = before - Number(matching.qty or 0) + Number(changedItem.qty)
-blocked = (after > before) && (after > maxCartQuantity)
+before = sum of qty of parent lines in the saved cart
+
+merge:        after = sum of qty of parent lines in quote.items
+add / update: after = before - (old qty of the same item_id, or 0 if new) + new qty
+
+block = after > before AND after > maxCartQuantity
 ```
-Parent means `parent_item_id`, `parentItemId` and `parent_item` are all absent/null. Rows sharing an SKU but with different `item_id` are distinct. An add without `item_id` is treated as a new row. A zero `qty` removes that row from the arithmetic. The rule throws on invalid max/qty or duplicate matching IDs. It returns `{ blocked, before, after, message }`; only blocked verdicts carry `BLOCK_MESSAGE = 'You have reached the maximum number of items.'`. A decrease or unchanged total is always allowed even if the resulting total exceeds the limit.
 
-## External read and response
-`commerce-cart-client.js` requires a numeric quote ID and uses `getCommerceClient(resolveImsAuthParams(params))`, built from the app's merchant association and IMS inputs; GET path is `carts/{quoteId}/items`. The code passes `{ timeout: 650 }` to GET, retries once on HTTP 502/503/504, `ETIMEDOUT`, or `ECONNRESET` after a 100 ms pause; malformed responses throw. `validate-cart.js` runs parse → readSettings → (if enabled) readCartItems → checkLimit, logging `allowed`, `blocked`, or sanitized error type. It uses `ok(successOperation())` for allowed/errors and `ok(exceptionOperation(BLOCK_MESSAGE))` for limits. Unexpected entrypoint exceptions are caught and return the success operation. **No guarantee of total <2 seconds:** config initialization/reads and client construction are not capped by this file.
+- A parent line has no `parent_item_id`.
+- A line without `item_id` is a new line.
+- Two lines with the same SKU but different `item_id` are counted separately.
 
-## Security and test seams
-The `cart-validation` Runtime actions are `web: "yes"`, `runtime: nodejs:24` and annotated `final: true`, `require-adobe-auth: true`, `include-ims-credentials: true`; manifest action inputs are `LOG_LEVEL` and six `AIO_COMMERCE_AUTH_IMS_*` settings (client ID, client secrets, technical account ID, technical account email, org ID and scopes). The shared orchestrator accepts injectable `logger`, `parse`, `settings`, and `cart` dependencies to unit-test behavior without network calls. No tokens, request bodies, SKU, or customer identifiers are written to logs. Do not edit SDK-generated assets or include `.env` in source control.
+**Examples (limit 10):**
 
-## Unverified contract / correctness checkpoints
-1. A `before` hook attached to an `*_after` observer must actually prevent a persisted cart change; verify both update and merge in sandbox.
-2. The GET cart may already include the candidate row/qty; if so `before` is miscomputed and legitimate over-limit changes may pass. Prove pre-change baseline for add/update/merge.
-3. `sourceItems` is parsed but **not used** by the current merge rule; verify whether `quote.items` is prospective, not pre-merge, and account for same-item merging correctly.
-4. Child row types/field names from REST and webhook must match the parent filter. Verify `item_id` on new and existing lines, permissions for GET, and whether Commerce delivers projected fields flat or nested.
-5. Invalid setting behavior is nuanced: missing/null values use defaults; malformed non-null values fail open. See [sandbox checklist](sandbox-test-checklist.md) for evidence required.
+| Scenario | before | after | Result |
+| --- | --- | --- | --- |
+| S4: A=6, add A×2 | 6 | 6 − 6 + 8 = 8 | Allowed |
+| S5b: A=3, B=3, C=3, change B to 5 | 9 | 9 − 3 + 5 = 11 | Blocked |
+| S8: A=8, limit 5, change A to 6 | 8 | 6 | Allowed (total went down) |
 
-## References
-[Commerce webhook response helpers](https://github.com/adobe/aio-commerce-sdk/blob/main/packages/aio-commerce-lib-webhooks/docs/usage.md) · [App Management client helper](https://developer.adobe.com/commerce/extensibility/app-management/helpers/) · [AC mapping](ac-to-test-mapping.md).
+## 4. Reading the cart (`commerce-cart-client.js`)
+
+- Calls `GET carts/{quoteId}/items` with the Commerce client of the installed app.
+- Timeout of 650 ms for each call.
+- Retries once after 100 ms on 502, 503, 504, `ETIMEDOUT` or `ECONNRESET`.
+
+## 5. Reading the settings (`settings.js`)
+
+- Reads `enabled` and `maxCartQuantity` at global scope, on every call.
+- If a value is empty, the default is used (`true`, `10`).
+- `maxCartQuantity` must be a whole number of 1 or more. Otherwise an error is raised and the change is allowed.
+
+## 6. Replies to Commerce (`validate-cart.js`)
+
+| Case | Reply |
+| --- | --- |
+| Allowed | `successOperation()` |
+| Blocked | `exceptionOperation('You have reached the maximum number of items.')` |
+| Any error | `successOperation()` plus an error log |
+
+## 7. Error handling
+
+| Error | Result |
+| --- | --- |
+| Bad or missing payload | Allowed, error logged |
+| Invalid setting | Allowed, error logged |
+| Settings cannot be read | Allowed, error logged |
+| Cart cannot be read (after 1 retry) | Allowed, error logged |
+| Any other error | Allowed, error logged |
+
+Logs contain only the result and the error type. No customer data, payloads or tokens.
+
+## 8. Security
+
+- Actions require Adobe authentication (`require-adobe-auth: true`).
+- Credentials come from the App Builder project, never from code.
+- `.env` is not committed.

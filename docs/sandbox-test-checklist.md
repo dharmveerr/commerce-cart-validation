@@ -1,20 +1,37 @@
-# Sandbox validation checklist
+# Sandbox Test Checklist: Cart Validation
 
-Scenario descriptions are inferred from the supplied AC mapping: the literal `requirements.md` was not provided here. Capture timestamps, cart state before and after, visible message, and evidence link for each case. Do not mark a row verified without sandbox execution.
+Scenarios are from [requirements.md](requirements.md), section 4. Steps are in [deployment-and-live-testing.md](deployment-and-live-testing.md).
 
-| Scenario | Manual operation / expected result | Evidence (fill after execution) |
-| --- | --- | --- |
-| S1 | Add units to stay below limit; accepted. | Not run |
-| S2 | Add units to reach limit exactly; accepted. | Not run |
-| S3 | Add units above limit; unchanged cart and exact message: `You have reached the maximum number of items.` | Not run |
-| S4 | Update existing SKU/item_id to remain within limit; old quantity replaced. | Not run |
-| S4b | Update existing SKU/item_id above limit; unchanged cart and exact message. | Not run |
-| S5 | Merge guest cart so total exceeds limit; unchanged carts and exact message. | Not run |
-| S5b | Add second line for same SKU with different options above limit; unchanged cart and exact message. | Not run |
-| S6 | Change Admin `maxCartQuantity` without redeploy; next cart change observes new value. | Not run |
-| S7 | Lower/remove quantity after Admin lowers limit; allowed even if still above it. | Not run |
-| S8 | Keep total unchanged while over limit; allowed. | Not run |
-| Admin Create-Order | Test Admin cart path; record whether hooks fire or note limitation. | Not run |
-| Error mode | Disable validation; test invalid settings and unavailable cart API; operations allowed, error logged without customer data. | Not run |
+| Field | Value |
+| --- | --- |
+| Date | |
+| Tester | |
+| Commerce instance | |
+| Code version (commit) | |
 
-Confirm field selection paths for add/update and whether merge's `quote.items` is pre- or post-merge; check hook types can block persistence, especially for `*_after` observer names. Record evidence in PR.
+## Scenarios (limit = 10)
+
+| # | Cart before | Action | Expected | Pass / Fail | Evidence |
+| --- | --- | --- | --- | --- | --- |
+| S1 | empty | Add A × 4 | Accepted, total 4 | | |
+| S2 | A=4 | Add B × 6 | Accepted, total 10 | | |
+| S3 | A=4, B=6 | Add C × 1 | **Blocked** with message, cart unchanged | | |
+| S4 | A=6 | Add A × 2 | Accepted, A = 8 (not 14) | | |
+| S4b | A=8 | Add A × 3 | **Blocked**, A stays 8 | | |
+| S5 | A=3, B=3, C=3 | Add D × 2 | **Blocked**, total stays 9 | | |
+| S5b | A=3, B=3, C=3 | Change B from 3 to 5 | **Blocked**, B stays 3 | | |
+| S6 | A=4 | Limit → 5, add B × 2; limit → 10, add B × 2 | **Blocked**, then accepted | | |
+| S7 | Customer cart 9; guest A=2, B=2 | Guest logs in | **Blocked**, customer cart stays 9 | | |
+| S8 | A=8, limit → 5 | Change A from 8 to 6 | Accepted (total goes down) | | |
+
+## Extra checks
+
+| Check | Expected | Pass / Fail | Evidence |
+| --- | --- | --- | --- |
+| Validation off | Any total accepted | | |
+| Remove an item (quantity 0) | Accepted | | |
+| Configurable product × 2 | Counted as 2 | | |
+| Invalid setting (`abc`) | Accepted, error logged | | |
+| Admin "Create New Order" (repeat S3) | Same as S3 | | |
+
+Message to check: `You have reached the maximum number of items.`

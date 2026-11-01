@@ -1,48 +1,59 @@
-# High-level design (HLD) — cart validation
+# High-Level Design: Cart Validation
 
-## System context
-```text
-Shopper cart change (ACCS)
-    | add / update / guest merge, synchronous webhook (installation required)
-    v
-Commerce webhook dispatcher -> App Builder authenticated Runtime web action
-                                  |               |
-                                  |               +--> App Management configuration (live global settings)
-                                  |               +--> Commerce REST Cart Items (IMS/association)
-                                  v
-                           Pure cart-limit rule
-                                  |
-                   successOperation / exceptionOperation
-                                  v
-                            Commerce -> shopper
+## 1. Flow
+
+```mermaid
+graph TD
+  S[Shopper: add, change quantity, or log in] --> C[Commerce]
+  C -->|webhook| A[App Builder action]
+  A --> CFG[App Management settings]
+  A --> CART[Commerce Cart Items API]
+  A --> R[Counting rule]
+  R -->|allow or block| C
+  C --> S
 ```
-The diagram shows the intended request flow; whether Commerce's selected observers execute early enough to preserve an unchanged cart on exception must be checked in sandbox.
 
-## Boundaries and components
-| Component | Responsibility | Source of truth |
+1. The shopper changes the cart.
+2. Commerce calls one of the three app actions through a webhook.
+3. The action reads the settings and the saved cart.
+4. The counting rule decides: allow or block.
+5. Commerce shows the result to the shopper.
+
+## 2. Components
+
+| Component | What it does | Where |
 | --- | --- | --- |
-| SDK typed app config | App metadata, webhook subscriptions, Admin fields | `app.commerce.config.ts` |
-| App Builder manifests | Declare `/commerce/extensibility/1` and `/commerce/configuration/1`; three user actions | `app.config.yaml`, `src/commerce-extensibility-1/ext.config.yaml` |
-| Entrypoints | Catch unexpected errors, dispatch `add` / `update` / `merge` | `src/commerce-extensibility-1/actions/validate-cart-{add,update,merge}/index.js` |
-| Orchestrator | Parse → settings → cart GET → rule → webhook operation/log | `src/commerce-extensibility-1/lib/validate-cart.js` |
-| Domain logic | Normalize payload, count only parents, compare before/after | `src/commerce-extensibility-1/lib/{parse-webhook-payload,cart-limit-rule,constants}.js` |
-| IO adapters | Read global Admin settings, get associated merchant's cart items | `src/commerce-extensibility-1/lib/{settings,commerce-cart-client}.js` |
-| Generated assets | Derived manifest/schema and App Management actions | `.generated/` directories; **not manually edited** |
+| App config | App name, settings, webhook list | `app.commerce.config.ts` |
+| Action list | Declares the three actions | `src/commerce-extensibility-1/ext.config.yaml` |
+| Actions (add, update, merge) | Entry points called by Commerce | `src/commerce-extensibility-1/actions/` |
+| Shared handler | Runs the steps: read payload, settings, cart, rule, reply | `lib/validate-cart.js` |
+| Payload reader | Reads the webhook data into a simple shape | `lib/parse-webhook-payload.js` |
+| Counting rule | Calculates the totals and decides | `lib/cart-limit-rule.js` |
+| Settings reader | Reads `enabled` and `maxCartQuantity` | `lib/settings.js` |
+| Cart reader | Reads the saved cart from Commerce | `lib/commerce-cart-client.js` |
+| Message | The block message, kept in one place | `lib/constants.js` |
+| Generated files | Created by the SDK, never edited by hand | `.generated/` folders |
 
-## Interactions
-1. Once associated/installed, Commerce calls the appropriate POST hook, supplying fields for add/update or unprojected merge objects.
-2. Runtime authenticates the web action at the gateway; IMS credential inputs are available for Commerce REST calls. The shared orchestrator validates payload shape and reads Admin settings anew.
-3. If enabled, the action fetches `carts/{quoteId}/items`. For an add/update line the rule replaces the matching existing `item_id` quantity or appends a new line; for merge it sums the payload's `quote.items` as the prospective total, comparing with the fetched cart.
-4. It returns the library's success or exception operation with HTTP 200 wire response. Errors cause success rather than a technical 5xx so failures are fail-open.
+## 3. Deployment
 
-## Deployment/runtime topology
-`app.config.yaml` includes the two SDK Commerce extension points. The generated App Management installation action registers subscriptions when the deployed app is installed/associated in Commerce Admin; building or deploying alone does **not** confirm installation. The action package is `cart-validation`, not the reserved generated `app-management` package. App Builder config provides Node.js 24; package modules use ESM. The typed config is transformed into a generated manifest during build. No separate stateful service, state keys, database collection, or scheduled worker is part of the design.
+- The app is deployed to an App Builder workspace (Stage first, then Production).
+- In Commerce Admin, the app is associated and installed through **App Management**. Installing it registers the three webhooks.
+- Deploying alone does **not** install the webhooks.
+- No database, storage or scheduled jobs.
 
-## Constraints and failure modes
-- Webhook `required: false` plus fail-open response means backend outages can bypass validation. Gateway auth failures and webhook fallbacks may not have the same error response as handler failures; exercise them separately in sandbox.
-- HTTP retry is bounded to two attempts for selected transient errors. End-to-end latency <2 seconds is a **target, not measured evidence**.
-- Merchant setting may be changed without a code deploy because the action calls `getConfigurationByKey` on each invocation; verify propagation in sandbox.
-- No concurrency lock: two simultaneous requests can read the same previous total. No signature-verification secret by approved scope. Do not put tokens or customer data into logs.
+## 4. External dependencies
 
-## Cross-references
-[Solution design](solution-design.md) · [LLD](lld.md) · [Blueprint](blueprint.md) · [Implementation](implementation.md) · [Sandbox checklist](sandbox-test-checklist.md).
+| Dependency | Used for |
+| --- | --- |
+| Commerce webhooks | Calling the app on cart changes |
+| App Management settings | The limit and on/off switch |
+| Commerce Cart Items REST API | Reading the other cart lines |
+| Adobe IMS (OAuth Server-to-Server) | Authentication |
+
+## 5. Failure behaviour
+
+- Any error: the change is allowed and an error is logged.
+- Webhooks are `required: false`, so if the app does not answer within 5 seconds, Commerce continues.
+- This means the limit is not enforced while the app is down.
+
+See also: [lld.md](lld.md).
