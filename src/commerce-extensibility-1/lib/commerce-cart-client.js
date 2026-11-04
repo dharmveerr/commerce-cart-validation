@@ -9,7 +9,7 @@ export async function readCartItems(params, quoteId) {
   const client = await getCommerceClient(resolveImsAuthParams(params));
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const items = await client.get(`carts/${encodeURIComponent(String(quoteId))}/items`, { timeout: 650 }).json();
+      const items = await client.get(`carts/${encodeURIComponent(String(quoteId))}/items`, { timeout: 1500 }).json();
       if (!Array.isArray(items)) throw new TypeError('Invalid cart items response');
       return items;
     } catch (error) {

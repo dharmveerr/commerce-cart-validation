@@ -76,7 +76,7 @@ aio app deploy
 1. In Commerce Admin, go to **Apps > App Management**.
 2. Find **Cart Validation**. Click **Associate App** and choose your project and workspace.
 3. Complete the installation. The status must be **Installed**.
-4. Check that the three webhooks in section 1 are active.
+4. Check that the three webhooks in section 1 are active. In **System > Webhooks** they appear with the app ID as prefix, for example `cart_validation_validate_cart_add`.
 
 ## 6. Configuration
 
@@ -87,14 +87,15 @@ In **Apps > App Management > Cart Validation > Configure** (global scope):
 | Enable cart validation | Yes | Turns the check on or off |
 | Maximum total cart quantity | `10` | Highest total number of units in a cart. Whole number, 1 or more. |
 
-- Changes apply immediately. No redeploy needed.
+- Changes apply without a redeploy, within about a minute of saving.
 - An invalid value (for example `0` or `abc`) means carts are allowed and an error is logged.
 - To turn the check off quickly, set **Enable cart validation** to **No**.
 
 ## 7. Testing
 
 - **Unit tests:** `npm test`
-- **Sandbox tests:** follow [docs/deployment-and-live-testing.md](docs/deployment-and-live-testing.md) and record results in [docs/sandbox-test-checklist.md](docs/sandbox-test-checklist.md).
+- **Sandbox tests:** follow [docs/deployment-and-live-testing.md](docs/deployment-and-live-testing.md).
+- **Results:** [docs/test-evidence.md](docs/test-evidence.md) (36/36 scenarios passed) and [docs/sandbox-test-checklist.md](docs/sandbox-test-checklist.md).
 - **Logs:** `aio app logs`. Look for `cart validation allowed`, `blocked` or `error`.
 
 Acceptance criteria mapping: [docs/ac-to-test-mapping.md](docs/ac-to-test-mapping.md).
@@ -111,7 +112,7 @@ src/commerce-extensibility-1/
   lib/cart-limit-rule.js               Counting rule
   lib/settings.js                      Reads the Admin settings
   lib/commerce-cart-client.js          Reads the cart from Commerce
-  lib/constants.js                     Block message
+  lib/constants.js                     Block message and exception class
 test/                                  Unit tests
 docs/                                  Requirements, design and test documents
 ```
@@ -122,14 +123,18 @@ docs/                                  Requirements, design and test documents
 - Two changes at the same moment can both pass and go over the limit.
 - Items added automatically by promotions are not checked.
 - One global limit for the whole store.
+- A single API request that adds multiple SKUs at once may exceed the limit.
+- Lowering the limit does not affect existing carts: a cart already above the new limit cannot grow, but can still be reduced and checked out.
 
-## 10. Assumptions (to confirm in the sandbox)
+## 10. Confirmed in the sandbox
 
-- A configurable or bundle product counts as its parent quantity only.
-- A blocked change leaves the cart unchanged (update and merge webhooks).
+See [docs/test-evidence.md](docs/test-evidence.md).
+
+- A configurable product counts as its parent line quantity only; each option is a separate line.
+- A blocked change leaves the cart unchanged (add, update and merge).
 - The cart read from Commerce shows the old quantities, not the new ones.
 - The merge payload contains the merged items in `quote.items`.
-- Admin "Create New Order" follows the same rule.
+- Not yet checked: Admin "Create New Order".
 
 ## 11. Documents
 
@@ -142,5 +147,6 @@ docs/                                  Requirements, design and test documents
 | [implementation.md](docs/implementation.md) | Files, status, known issues |
 | [deployment-runbook.md](docs/deployment-runbook.md) | Deploy, install, go/no-go, rollback |
 | [deployment-and-live-testing.md](docs/deployment-and-live-testing.md) | Sandbox test steps |
-| [sandbox-test-checklist.md](docs/sandbox-test-checklist.md) | Test results and evidence |
+| [sandbox-test-checklist.md](docs/sandbox-test-checklist.md) | Sandbox checklist with pass/fail |
+| [test-evidence.md](docs/test-evidence.md) | Live test evidence (all scenarios, cart before/after) |
 | [ac-to-test-mapping.md](docs/ac-to-test-mapping.md) | Acceptance criteria to tests |

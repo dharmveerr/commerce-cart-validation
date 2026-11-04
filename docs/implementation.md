@@ -13,7 +13,7 @@
 | `src/commerce-extensibility-1/lib/cart-limit-rule.js` | Counting rule |
 | `src/commerce-extensibility-1/lib/settings.js` | Reads the settings |
 | `src/commerce-extensibility-1/lib/commerce-cart-client.js` | Reads the cart from Commerce |
-| `src/commerce-extensibility-1/lib/constants.js` | Block message |
+| `src/commerce-extensibility-1/lib/constants.js` | Block message and exception class |
 | `test/*.test.js` | Unit tests (`node:test`) |
 | `src/**/.generated/` | Created by the SDK. Do not edit. |
 
@@ -36,15 +36,15 @@ npx aio-commerce-lib-app generate all
 | Item | Status |
 | --- | --- |
 | Code | Done |
-| Unit tests | 22 tests passed (reported by CDA) |
+| Unit tests | 23 tests passed |
 | Deploy to Stage | Done |
-| Install in Commerce (App Management) | Not done |
-| Sandbox tests S1 to S8 | Not done |
+| Install in Commerce (App Management) | Done |
+| Sandbox tests | Done: 36/36 passed, see [test-evidence.md](test-evidence.md) |
 | Pull request | Not done |
 
-## 4. Known issues (fix after the first sandbox round)
+## 4. Known issues
 
-1. `parent_item_id` is missing from the webhook fields, so child lines of configurable products may be counted.
+1. `parent_item_id` is not in the webhook fields. In the sandbox, configurable products were counted correctly (scenarios C1 to C14).
 2. Unit test names use different scenario numbers from [requirements.md](requirements.md).
 3. No unit tests for `settings.js` (invalid values like `0` or `abc`).
 4. `enabled` must be a true boolean. If Commerce sends `"true"` as text, the check is skipped.

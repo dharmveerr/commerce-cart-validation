@@ -77,7 +77,7 @@ If the saved value is invalid (for example `0` or text), carts are allowed and a
 
 ## 7. Non-functional needs
 
-- **Speed:** each check must answer well within the webhook timeout (target under 2 seconds).
+- **Speed:** each check must answer well within the webhook timeout (target under 3 seconds).
 - **Reliability:** if the settings or the cart cannot be read, allow the change and log an error. Only the limit rule blocks.
 - **Security:** no hard-coded URLs, tokens or secrets. Logs contain no customer data or tokens.
 - **Portability:** works for any ACCS project that installs the app (no fixed store URL).

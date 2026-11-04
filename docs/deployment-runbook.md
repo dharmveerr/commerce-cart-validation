@@ -13,7 +13,7 @@ Follow the steps in order. Tick a step only after you have seen it work.
 | App ID / name | `cart-validation` / Cart Validation |
 | Commerce instance | Choose the ACCS **sandbox** yourself. Never production. |
 
-**Current status:** deployed to Stage. Not yet installed in Commerce.
+**Current status:** deployed to Stage, installed in Commerce and tested in the sandbox ([test-evidence.md](test-evidence.md)).
 
 ## 1. Before deploying
 
@@ -44,25 +44,25 @@ Follow the steps in order. Tick a step only after you have seen it work.
 - [ ] Open the sandbox Commerce Admin and go to **Apps > App Management**.
 - [ ] Find **Cart Validation**. If it is not associated, click **Associate App** and choose project **Comm Cart Validation**, workspace **Stage**.
 - [ ] Complete the installation. The status must be **Installed** (not only "Associated" or "Partially Installed").
-- [ ] Check that three webhooks are active:
+- [ ] Check that three webhooks are active (App Management prefixes the names with the app ID):
 
   | Hook name | Webhook |
   | --- | --- |
-  | `validate_cart_add` | `observer.sales_quote_add_item` |
-  | `validate_cart_update` | `observer.sales_quote_item_save_after` |
-  | `validate_cart_merge` | `observer.sales_quote_merge_after` |
+  | `cart_validation_validate_cart_add` | `observer.sales_quote_add_item` |
+  | `cart_validation_validate_cart_update` | `observer.sales_quote_item_save_after` |
+  | `cart_validation_validate_cart_merge` | `observer.sales_quote_merge_after` |
 
 ## 4. Configure
 
 - [ ] On the **Cart Validation** card, click **Configure** (global scope):
   - **Enable cart validation**: Yes
   - **Maximum total cart quantity**: `10`
-- [ ] Click **Save**, then reopen to check the values are saved.
+- [ ] Click **Save**, then reopen to check the values are saved. Changes reach live carts within about a minute.
 
 ## 5. Test
 
 - [ ] Run all tests in [deployment-and-live-testing.md](deployment-and-live-testing.md).
-- [ ] Fill in [sandbox-test-checklist.md](sandbox-test-checklist.md) with evidence.
+- [ ] Fill in [sandbox-test-checklist.md](sandbox-test-checklist.md) with evidence. Detailed results: [test-evidence.md](test-evidence.md).
 
 ## 6. Go / no-go
 

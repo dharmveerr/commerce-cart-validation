@@ -46,7 +46,7 @@ block = after > before AND after > maxCartQuantity
 ## 4. Reading the cart (`commerce-cart-client.js`)
 
 - Calls `GET carts/{quoteId}/items` with the Commerce client of the installed app.
-- Timeout of 650 ms for each call.
+- Timeout of 1500 ms for each call (stays within the 5000 ms webhook hard timeout including one retry).
 - Retries once after 100 ms on 502, 503, 504, `ETIMEDOUT` or `ECONNRESET`.
 
 ## 5. Reading the settings (`settings.js`)
