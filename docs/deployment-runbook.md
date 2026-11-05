@@ -54,10 +54,14 @@ Follow the steps in order. Tick a step only after you have seen it work.
 
 ## 4. Configure
 
+Installation references: [installed app](test-evidence.md#app-installation) and [webhook subscriptions](test-evidence.md#webhook-subscriptions).
+
 - [ ] On the **Cart Validation** card, click **Configure** (global scope):
   - **Enable cart validation**: Yes
   - **Maximum total cart quantity**: `10`
 - [ ] Click **Save**, then reopen to check the values are saved. Changes reach live carts within about a minute.
+
+Configuration reference: [global configuration screenshot](test-evidence.md#global-configuration).
 
 ## 5. Test
 

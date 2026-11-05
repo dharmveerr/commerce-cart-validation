@@ -95,7 +95,7 @@ In **Apps > App Management > Cart Validation > Configure** (global scope):
 
 - **Unit tests:** `npm test`
 - **Sandbox tests:** follow [docs/deployment-and-live-testing.md](docs/deployment-and-live-testing.md).
-- **Results:** [docs/test-evidence.md](docs/test-evidence.md) (36/36 scenarios passed) and [docs/sandbox-test-checklist.md](docs/sandbox-test-checklist.md).
+- **Results:** [docs/test-evidence.md](docs/test-evidence.md) (36/36 selected scenarios passed, with [screenshot evidence](docs/test-evidence.md#screenshot-evidence)) and [docs/sandbox-test-checklist.md](docs/sandbox-test-checklist.md).
 - **Logs:** `aio app logs`. Look for `cart validation allowed`, `blocked` or `error`.
 
 Acceptance criteria mapping: [docs/ac-to-test-mapping.md](docs/ac-to-test-mapping.md).

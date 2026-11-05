@@ -36,3 +36,5 @@ Scenarios are from [requirements.md](requirements.md), section 4. Steps are in [
 | Guest cart limit | Blocked above 10 | Pass | [G1–G3](test-evidence.md#step-3--guest-cart-and-cart-merge) |
 
 Message to check: `You have reached the maximum number of items.`
+
+Representative screenshots: [GraphQL add response](test-evidence.md#graphql-add-response), [blocked response](test-evidence.md#graphql-blocked-response), and [global configuration](test-evidence.md#global-configuration). These supplement the recorded results; unit-only and not-run checks above remain unchanged.

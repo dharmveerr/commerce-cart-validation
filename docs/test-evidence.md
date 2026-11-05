@@ -11,7 +11,6 @@
 | Customer | Logged-in test customer `dharmveerr@adobe.com` (shared catalog: all products) |
 | Settings | App Management → Cart Validation: **Enable = Yes**, **Maximum total cart quantity = 10** |
 | Block message | `You have reached the maximum number of items.` |
-| Runner | [test/live/cart-scenarios.mjs](../test/live/cart-scenarios.mjs) (`node test/live/cart-scenarios.mjs --step=1|2|3`) |
 
 Notation: `A`=HDP-1001, `B`=PSV-3003, `C`=ISS-4004, `D`=HEC-2002 (simple products). `config-1`=Orchard5, `config-2`=ProtectiveCaseforOrchard1-2-3 (configurable, option = Color). Cart totals are the storefront `total_quantity` read before and after each request.
 
@@ -101,4 +100,36 @@ Installed by App Management (Commerce Admin → System → Webhooks):
 | `cart_validation_validate_cart_update` | `observer.sales_quote_item_save_after` | before | `cart-validation/validate-cart-update` |
 | `cart_validation_validate_cart_merge` | `observer.sales_quote_merge_after` | before | `cart-validation/validate-cart-merge` |
 
-Raw per-request results (cart before/after, response, timestamps) are saved locally by the runner in `test/live/results/`.
+## Screenshot evidence
+
+These screenshots supplement the recorded results above. They are representative examples, not separate proof of every selected scenario. The API response images alone do not establish that a blocked operation left the cart unchanged; those observations are recorded in the scenario tables.
+
+### App installation
+
+Cart Validation is shown as installed in Commerce App Management.
+
+![Cart Validation installed in App Management](Screenshots/App-associated.png)
+
+### Global configuration
+
+The Cart Validation configuration form exposes the enable setting and maximum total cart quantity at global scope. Settings-change results are recorded in the settings table above.
+
+![Cart Validation global configuration form](Screenshots/app-configuration.png)
+
+### Webhook subscriptions
+
+Commerce lists the three cart-validation webhook subscriptions described above.
+
+![Three cart-validation webhook subscriptions in Commerce](Screenshots/webhook-subscription.png)
+
+### GraphQL add response
+
+Representative storefront GraphQL add request and response. See the scenario tables for the recorded quantities and outcomes of each selected test.
+
+![Storefront GraphQL add request and response](Screenshots/graphql-addProduct.png)
+
+### GraphQL blocked response
+
+An add request with quantity 11 returns the configured message: `You have reached the maximum number of items.` This illustrates the blocking response rather than a specific numbered scenario above.
+
+![GraphQL over-limit add returns the configured block message](Screenshots/graphql-add-exceed-limit.png)
