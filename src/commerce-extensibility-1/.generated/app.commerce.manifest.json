@@ -1,0 +1,140 @@
+{
+  "businessConfig": {
+    "schema": [
+      {
+        "default": true,
+        "label": "Enable cart validation",
+        "name": "enabled",
+        "type": "boolean"
+      },
+      {
+        "default": "10",
+        "description": "Positive whole number of units across all cart lines.",
+        "label": "Maximum total cart quantity",
+        "name": "maxCartQuantity",
+        "type": "text"
+      }
+    ]
+  },
+  "metadata": {
+    "description": "Limits the total units in a Commerce cart to an Admin-configurable maximum, validated synchronously via webhooks on add, quantity change, and guest cart merge at login.",
+    "displayName": "Cart Validation",
+    "id": "cart-validation",
+    "upgradeMode": "manual",
+    "version": "1.0.0"
+  },
+  "webhooks": [
+    {
+      "category": "validation",
+      "description": "Check the total units when an item is added.",
+      "env": [
+        "saas"
+      ],
+      "label": "Validate cart add",
+      "runtimeAction": "cart-validation/validate-cart-add",
+      "webhook": {
+        "batch_name": "cart_validation",
+        "fallback_error_message": "We could not validate your cart right now. Please try again.",
+        "fields": [
+          {
+            "name": "sku",
+            "source": "data.quote_item.sku"
+          },
+          {
+            "name": "qty",
+            "source": "data.quote_item.qty"
+          },
+          {
+            "name": "quote_id",
+            "source": "data.quote_item.quote_id"
+          },
+          {
+            "name": "item_id",
+            "source": "data.quote_item.item_id"
+          },
+          {
+            "name": "product_type",
+            "source": "data.quote_item.product_type"
+          },
+          {
+            "name": "product_option",
+            "source": "data.quote_item.product_option"
+          }
+        ],
+        "hook_name": "validate_cart_add",
+        "method": "POST",
+        "required": false,
+        "soft_timeout": 3000,
+        "timeout": 5000,
+        "webhook_method": "observer.sales_quote_add_item",
+        "webhook_type": "before"
+      }
+    },
+    {
+      "category": "validation",
+      "description": "Check the total units when an item quantity changes.",
+      "env": [
+        "saas"
+      ],
+      "label": "Validate cart update",
+      "runtimeAction": "cart-validation/validate-cart-update",
+      "webhook": {
+        "batch_name": "cart_validation",
+        "fallback_error_message": "We could not validate your cart right now. Please try again.",
+        "fields": [
+          {
+            "name": "sku",
+            "source": "data.item.sku"
+          },
+          {
+            "name": "qty",
+            "source": "data.item.qty"
+          },
+          {
+            "name": "quote_id",
+            "source": "data.item.quote_id"
+          },
+          {
+            "name": "item_id",
+            "source": "data.item.item_id"
+          },
+          {
+            "name": "product_type",
+            "source": "data.item.product_type"
+          },
+          {
+            "name": "product_option",
+            "source": "data.item.product_option"
+          }
+        ],
+        "hook_name": "validate_cart_update",
+        "method": "POST",
+        "required": false,
+        "soft_timeout": 3000,
+        "timeout": 5000,
+        "webhook_method": "observer.sales_quote_item_save_after",
+        "webhook_type": "before"
+      }
+    },
+    {
+      "category": "validation",
+      "description": "Check the total units when a guest cart merges.",
+      "env": [
+        "saas"
+      ],
+      "label": "Validate cart merge",
+      "runtimeAction": "cart-validation/validate-cart-merge",
+      "webhook": {
+        "batch_name": "cart_validation",
+        "fallback_error_message": "We could not validate your cart right now. Please try again.",
+        "hook_name": "validate_cart_merge",
+        "method": "POST",
+        "required": false,
+        "soft_timeout": 3000,
+        "timeout": 5000,
+        "webhook_method": "observer.sales_quote_merge_after",
+        "webhook_type": "before"
+      }
+    }
+  ]
+}

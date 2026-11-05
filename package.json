@@ -1,0 +1,29 @@
+{
+  "name": "cart-validation",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@adobe/aio-commerce-lib-app": "^2.0.0",
+    "@adobe/aio-commerce-lib-config": "^1.8.0",
+    "@adobe/aio-commerce-lib-webhooks": "1.2.2",
+    "@adobe/aio-commerce-sdk": "^2.0.0",
+    "@adobe/aio-lib-core-logging": "3.0.2",
+    "@ljharb/tsconfig": "^0.2.3",
+    "ts-loader": "^9.6.2",
+    "typescript": "^6.0.3"
+  },
+  "devDependencies": {
+    "@tsconfig/bases": "^1.0.28"
+  },
+  "description": "Limits the total units in a Commerce cart to an Admin-configurable maximum, validated synchronously via webhooks on add, quantity change, and guest cart merge at login.",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "typecheck:actions": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "npm run typecheck:actions",
+    "postinstall": "npx aio-commerce-lib-app hooks postinstall"
+  },
+  "imports": {
+    "#app.commerce.config": "./src/commerce-extensibility-1/.generated/app.commerce.config.js"
+  }
+}
